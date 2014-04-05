@@ -1,5 +1,4 @@
-obj/local/armeabi-v7a/objs-debug/mixed_sample/jni_part.o: \
- jni/jni_part.cpp \
+obj/local/armeabi-v7a/objs/mixed_sample/jni_part.o: jni/jni_part.cpp \
  /home/imocanu/NVPACK/android-ndk-r9b/platforms/android-9/arch-arm/usr/include/jni.h \
  /home/imocanu/NVPACK/android-ndk-r9b/platforms/android-9/arch-arm/usr/include/sys/cdefs.h \
  /home/imocanu/NVPACK/android-ndk-r9b/platforms/android-9/arch-arm/usr/include/sys/cdefs_elf.h \
