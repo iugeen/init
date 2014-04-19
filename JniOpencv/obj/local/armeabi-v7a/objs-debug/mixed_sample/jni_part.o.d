@@ -54,7 +54,8 @@ obj/local/armeabi-v7a/objs-debug/mixed_sample/jni_part.o: \
  ../../NVPACK/OpenCV-2.4.5-Tegra-sdk-r2/sdk/native/jni/include/opencv2/highgui/highgui.hpp \
  ../../NVPACK/OpenCV-2.4.5-Tegra-sdk-r2/sdk/native/jni/include/opencv2/highgui/highgui_c.h \
  /home/imocanu/NVPACK/android-ndk-r9b/sources/cxx-stl/gnu-libstdc++/4.6/include/iostream \
- /home/imocanu/NVPACK/android-ndk-r9b/sources/cxx-stl/gnu-libstdc++/4.6/include/iterator
+ /home/imocanu/NVPACK/android-ndk-r9b/sources/cxx-stl/gnu-libstdc++/4.6/include/iterator \
+ /home/imocanu/NVPACK/android-ndk-r9b/platforms/android-9/arch-arm/usr/include/android/log.h
 
 /home/imocanu/NVPACK/android-ndk-r9b/platforms/android-9/arch-arm/usr/include/jni.h:
 
@@ -165,3 +166,5 @@ obj/local/armeabi-v7a/objs-debug/mixed_sample/jni_part.o: \
 /home/imocanu/NVPACK/android-ndk-r9b/sources/cxx-stl/gnu-libstdc++/4.6/include/iostream:
 
 /home/imocanu/NVPACK/android-ndk-r9b/sources/cxx-stl/gnu-libstdc++/4.6/include/iterator:
+
+/home/imocanu/NVPACK/android-ndk-r9b/platforms/android-9/arch-arm/usr/include/android/log.h:

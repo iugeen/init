@@ -24,6 +24,7 @@ public class JniOpencvActivity extends Activity implements CvCameraViewListener2
     private static final int       VIEW_MODE_GRAY     = 1;
     private static final int       VIEW_MODE_CANNY    = 2;
     private static final int       VIEW_MODE_FEATURES = 5;
+    private static final int       initStereoCamera = 6;
 
     private int                    mViewMode;
     private Mat                    mRgba;
@@ -34,6 +35,7 @@ public class JniOpencvActivity extends Activity implements CvCameraViewListener2
     private MenuItem               mItemPreviewGray;
     private MenuItem               mItemPreviewCanny;
     private MenuItem               mItemPreviewFeatures;
+    private MenuItem               mInitStereoCamera;
 
     private CameraBridgeViewBase   mOpenCvCameraView;
 
@@ -48,7 +50,7 @@ public class JniOpencvActivity extends Activity implements CvCameraViewListener2
                     // Load native library after(!) OpenCV initialization
                     System.loadLibrary("mixed_sample");
 
-                    mOpenCvCameraView.enableView();
+                    //mOpenCvCameraView.enableView();
                 } break;
                 default:
                 {
@@ -71,8 +73,9 @@ public class JniOpencvActivity extends Activity implements CvCameraViewListener2
 
         setContentView(R.layout.tutorial2_surface_view);
 
-        mOpenCvCameraView = (CameraBridgeViewBase) findViewById(R.id.tutorial2_activity_surface_view);
-        mOpenCvCameraView.setCvCameraViewListener(this);
+//        mOpenCvCameraView = (CameraBridgeViewBase) findViewById(R.id.tutorial2_activity_surface_view);
+//        mOpenCvCameraView.setCvCameraViewListener(this);
+        
     }
 
     @Override
@@ -82,6 +85,7 @@ public class JniOpencvActivity extends Activity implements CvCameraViewListener2
         mItemPreviewGray = menu.add("Preview GRAY");
         mItemPreviewCanny = menu.add("Canny");
         mItemPreviewFeatures = menu.add("Find features");
+        mInitStereoCamera = menu.add("Init StereoCamera");
         return true;
     }
 
@@ -141,8 +145,10 @@ public class JniOpencvActivity extends Activity implements CvCameraViewListener2
             mGray = inputFrame.gray();
             FindFeatures(mGray.getNativeObjAddr(), mRgba.getNativeObjAddr());
             break;
+        case initStereoCamera:
+            InitStereoCamera();
+            break;
         }
-
         return mRgba;
     }
 
@@ -157,10 +163,14 @@ public class JniOpencvActivity extends Activity implements CvCameraViewListener2
             mViewMode = VIEW_MODE_CANNY;
         } else if (item == mItemPreviewFeatures) {
             mViewMode = VIEW_MODE_FEATURES;
-        }
+	    } else if (item == mInitStereoCamera) {
+	        mViewMode = initStereoCamera;
+	    }
 
         return true;
     }
 
     public native void FindFeatures(long matAddrGr, long matAddrRgba);
+    
+    public native void InitStereoCamera();
 }
