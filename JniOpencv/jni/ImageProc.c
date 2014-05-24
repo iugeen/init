@@ -6,8 +6,6 @@ int errnoexit(const char *s)
 	return ERROR_LOCAL;
 }
 
-sdfhryt
-
 int xioctl(int fd, int request, void *arg)
 {
 	int r;

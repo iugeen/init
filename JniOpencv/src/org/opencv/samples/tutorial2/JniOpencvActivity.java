@@ -1,176 +1,118 @@
 package org.opencv.samples.tutorial2;
 
-import org.opencv.android.BaseLoaderCallback;
-import org.opencv.android.CameraBridgeViewBase.CvCameraViewFrame;
-import org.opencv.android.LoaderCallbackInterface;
-import org.opencv.android.OpenCVLoader;
-import org.opencv.core.CvType;
-import org.opencv.core.Mat;
-import org.opencv.android.CameraBridgeViewBase;
-import org.opencv.android.CameraBridgeViewBase.CvCameraViewListener2;
-import org.opencv.imgproc.Imgproc;
+//import org.opencv.samples.tutorial2.R;
 
 import android.app.Activity;
+import android.content.SharedPreferences;
+import android.graphics.Matrix;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Message;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
-import android.view.WindowManager;
+import android.view.View;
+import android.view.View.OnClickListener;
+import android.widget.Toast;
 
-public class JniOpencvActivity extends Activity implements CvCameraViewListener2 {
-    private static final String    TAG = "OCVSample::Activity";
+public class JniOpencvActivity extends Activity {
+	
+	private static final String PREFERENCES_MATRIX = "org.opencv.samples.tutorial2.flipmatrix_";
 
-    private static final int       VIEW_MODE_RGBA     = 0;
-    private static final int       VIEW_MODE_GRAY     = 1;
-    private static final int       VIEW_MODE_CANNY    = 2;
-    private static final int       VIEW_MODE_FEATURES = 5;
-    private static final int       initStereoCamera = 6;
-
-    private int                    mViewMode;
-    private Mat                    mRgba;
-    private Mat                    mIntermediateMat;
-    private Mat                    mGray;
-
-    private MenuItem               mItemPreviewRGBA;
-    private MenuItem               mItemPreviewGray;
-    private MenuItem               mItemPreviewCanny;
-    private MenuItem               mItemPreviewFeatures;
-    private MenuItem               mInitStereoCamera;
-
-    private CameraBridgeViewBase   mOpenCvCameraView;
-
-    private BaseLoaderCallback  mLoaderCallback = new BaseLoaderCallback(this) {
-        @Override
-        public void onManagerConnected(int status) {
-            switch (status) {
-                case LoaderCallbackInterface.SUCCESS:
-                {
-                    Log.i(TAG, "OpenCV loaded successfully");
-
-                    // Load native library after(!) OpenCV initialization
-                    System.loadLibrary("mixed_sample");
-
-                    //mOpenCvCameraView.enableView();
-                } break;
-                default:
-                {
-                    super.onManagerConnected(status);
-                } break;
-            }
-        }
-    };
-
-    public JniOpencvActivity() {
-        Log.i(TAG, "Instantiated new " + this.getClass());
+	private static final String MENU_ITEM_FLIPLR = "Flip Horizontal";
+	private static final int MENU_ITEM_ID_FLIPLR = 1;
+	private static final String MENU_ITEM_FLIPUD = "Flip Vertical";
+	private static final int MENU_ITEM_ID_FLIPUD = 2;
+	private static final int MENU_GROUP_FLIP = 1; 
+	
+    static {
+        System.loadLibrary("ImageProc");
     }
-
-    /** Called when the activity is first created. */
-    @Override
-    public void onCreate(Bundle savedInstanceState) {
-        Log.i(TAG, "called onCreate");
-        super.onCreate(savedInstanceState);
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-
-        setContentView(R.layout.tutorial2_surface_view);
-
-//        mOpenCvCameraView = (CameraBridgeViewBase) findViewById(R.id.tutorial2_activity_surface_view);
-//        mOpenCvCameraView.setCvCameraViewListener(this);
-        
-    }
-
-    @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-        Log.i(TAG, "called onCreateOptionsMenu");
-        mItemPreviewRGBA = menu.add("Preview RGBA");
-        mItemPreviewGray = menu.add("Preview GRAY");
-        mItemPreviewCanny = menu.add("Canny");
-        mItemPreviewFeatures = menu.add("Find features");
-        mInitStereoCamera = menu.add("Init StereoCamera");
-        return true;
-    }
-
-    @Override
-    public void onPause()
-    {
-        super.onPause();
-        if (mOpenCvCameraView != null)
-            mOpenCvCameraView.disableView();
-    }
-
-    @Override
-    public void onResume()
-    {
-        super.onResume();
-        OpenCVLoader.initAsync(OpenCVLoader.OPENCV_VERSION_2_4_5, this, mLoaderCallback);
-    }
-
-    public void onDestroy() {
-        super.onDestroy();
-        if (mOpenCvCameraView != null)
-            mOpenCvCameraView.disableView();
-    }
-
-    public void onCameraViewStarted(int width, int height) {
-        mRgba = new Mat(height, width, CvType.CV_8UC4);
-        mIntermediateMat = new Mat(height, width, CvType.CV_8UC4);
-        mGray = new Mat(height, width, CvType.CV_8UC1);
-    }
-
-    public void onCameraViewStopped() {
-        mRgba.release();
-        mGray.release();
-        mIntermediateMat.release();
-    }
-
-    public Mat onCameraFrame(CvCameraViewFrame inputFrame) {
-        final int viewMode = mViewMode;
-        switch (viewMode) {
-        case VIEW_MODE_GRAY:
-            // input frame has gray scale format
-            Imgproc.cvtColor(inputFrame.gray(), mRgba, Imgproc.COLOR_GRAY2RGBA, 4);
-            break;
-        case VIEW_MODE_RGBA:
-            // input frame has RBGA format
-            mRgba = inputFrame.rgba();
-            break;
-        case VIEW_MODE_CANNY:
-            // input frame has gray scale format
-            mRgba = inputFrame.rgba();
-            Imgproc.Canny(inputFrame.gray(), mIntermediateMat, 80, 100);
-            Imgproc.cvtColor(mIntermediateMat, mRgba, Imgproc.COLOR_GRAY2RGBA, 4);
-            break;
-        case VIEW_MODE_FEATURES:
-            // input frame has RGBA format
-            mRgba = inputFrame.rgba();
-            mGray = inputFrame.gray();
-            FindFeatures(mGray.getNativeObjAddr(), mRgba.getNativeObjAddr());
-            break;
-        case initStereoCamera:
-            InitStereoCamera();
-            break;
-        }
-        return mRgba;
-    }
-
-    public boolean onOptionsItemSelected(MenuItem item) {
-        Log.i(TAG, "called onOptionsItemSelected; selected item: " + item);
-
-        if (item == mItemPreviewRGBA) {
-            mViewMode = VIEW_MODE_RGBA;
-        } else if (item == mItemPreviewGray) {
-            mViewMode = VIEW_MODE_GRAY;
-        } else if (item == mItemPreviewCanny) {
-            mViewMode = VIEW_MODE_CANNY;
-        } else if (item == mItemPreviewFeatures) {
-            mViewMode = VIEW_MODE_FEATURES;
-	    } else if (item == mInitStereoCamera) {
-	        mViewMode = initStereoCamera;
-	    }
-
-        return true;
-    }
-
-    public native void FindFeatures(long matAddrGr, long matAddrRgba);
-    
-    public native void InitStereoCamera();
+	
+	CameraPreview cp;
+	SharedPreferences preferences;
+	SharedPreferences.Editor editor;
+	
+	@Override
+	public void onCreate(Bundle savedInstanceState) {
+		super.onCreate(savedInstanceState);
+		
+		setContentView(R.layout.tutorial2_surface_view);
+		
+		System.out.println(System.getProperty("java.library.path"));
+		
+		Toast.makeText(getBaseContext(),">> TEST: " + System.getProperty("java.library.path"), Toast.LENGTH_LONG).show();
+		
+		preferences = this.getPreferences(MODE_PRIVATE);
+		editor = preferences.edit();
+		
+		cp = (CameraPreview)findViewById(R.id.cameraSurfaceView);
+		
+		//load preferences to matrix
+		Matrix tmp_mx = new Matrix();
+		tmp_mx.reset();
+		float[] mx_array = new float[9];
+		tmp_mx.getValues(mx_array);
+		for(int i=0;i<mx_array.length;i++)
+		{
+			mx_array[i] = preferences.getFloat(PREFERENCES_MATRIX + i,mx_array[i]);
+		}
+		this.cp.mx.setValues(mx_array);
+		
+	}
+	
+	@Override
+	public boolean onCreateOptionsMenu(Menu menu) {
+		// TODO Auto-generated method stub
+		
+		menu.add(MENU_GROUP_FLIP,MENU_ITEM_ID_FLIPLR,Menu.NONE,MENU_ITEM_FLIPLR);
+		menu.add(MENU_GROUP_FLIP,MENU_ITEM_ID_FLIPUD,Menu.NONE,MENU_ITEM_FLIPUD);
+		
+		return super.onCreateOptionsMenu(menu);
+	}
+	
+	@SuppressWarnings("null")
+	@Override
+	public boolean onOptionsItemSelected(MenuItem item) {
+		// TODO Auto-generated method stub
+		switch(item.getGroupId())
+		{
+			case MENU_GROUP_FLIP:
+				
+				switch(item.getItemId())
+				{
+					case MENU_ITEM_ID_FLIPLR:
+						this.cp.mx.postScale(-1.0f,1.0f);
+						this.cp.mx.postTranslate(CameraPreview.IMG_WIDTH, 0);
+						break;
+						
+					case MENU_ITEM_ID_FLIPUD:
+						this.cp.mx.postScale(1.0f,-1.0f);
+						this.cp.mx.postTranslate(0, CameraPreview.IMG_HEIGHT);
+						break;
+						
+					default:
+						Log.e(this.getLocalClassName(), "unrecognized menu id group");
+						break;
+				}
+				
+				//save matrix to preferences
+				float[] mx_array = new float[9];
+				this.cp.mx.getValues(mx_array);
+				for(int i=0;i<mx_array.length;i++)
+				{
+					editor.putFloat(PREFERENCES_MATRIX + i, mx_array[i]);
+				}
+				editor.commit();
+				break;
+				
+			default:
+				Log.e(this.getLocalClassName(), "unrecognized menu group");
+				break;
+		}
+			
+		
+		return super.onOptionsItemSelected(item);
+	}
+	
 }
