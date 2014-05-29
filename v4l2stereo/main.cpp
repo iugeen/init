@@ -48,8 +48,6 @@
 #define USE_OPENCV
 
 #include <iostream>
-//#include <cv.h>
-//#include <highgui.h>
 
 #include <opencv/cv.h>
 #include <opencv/cxmisc.h>
@@ -62,8 +60,12 @@
 #include <unistd.h>
 
 #include "opencv2/calib3d/calib3d.hpp"
-#include "opencv2/highgui/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
+#include "opencv2/highgui/highgui.hpp"
+#include "opencv2/contrib/contrib.hpp"
+
+#include <stdio.h>
+#include <vector>
 
 #include <vector>
 #include <string>
@@ -80,13 +82,8 @@
 #include <gst/app/gstappbuffer.h>
 #endif
 
-#include "anyoption.h"
-#include "drawing.h"
-#include "stereo.h"
-#include "fast.h"
 #include "libcam.h"
-
-#include"stereovision.h"
+#include "stereovision.h"
 
 #define VERSION			1.054
 
@@ -104,25 +101,227 @@ using namespace std;
  * \param expanded returned expanded image
  */
 
-int main(int argc, char* argv[])
+
+int showDepthMap(IplImage *lg,IplImage *rg, String windowName, int algorithm)
 {
 
-     StereoVision* vision;
-     vision = new StereoVision(320,240);
+    /// ====================== DEPTH MAP ============================ ///
 
+    const char* intrinsic_filename = "/home/imocanu/Test_PHOTO/intrinsics.yml";
+    const char* extrinsic_filename = "/home/imocanu/Test_PHOTO/extrinsics.yml";
+
+    enum { STEREO_BM=0, STEREO_SGBM=1, STEREO_HH=2, STEREO_VAR=3 };
+    int alg = algorithm; // STEREO_SGBM;
+    int SADWindowSize = 0, numberOfDisparities = 0;
+    bool no_display = false;
+    float scale = 1.f;
+
+    StereoBM bm;
+    StereoSGBM sgbm;
+    StereoVar var;
+
+    Mat img1(lg);
+    Mat img2(rg);
+
+    if( scale != 1.f )
+    {
+        Mat temp1, temp2;
+        int method = scale < 1 ? INTER_AREA : INTER_CUBIC;
+        resize(img1, temp1, Size(), scale, scale, method);
+        img1 = temp1;
+        resize(img2, temp2, Size(), scale, scale, method);
+        img2 = temp2;
+    }
+
+    Size img_size = img1.size();
+
+    Rect roi1, roi2;
+    Mat Q;
+
+    if( true )
+    {
+        // reading intrinsic parameters
+        FileStorage fs(intrinsic_filename, CV_STORAGE_READ);
+        if(!fs.isOpened())
+        {
+            printf("Failed to open file %s\n", intrinsic_filename);
+            return -1;
+        }
+
+        Mat M1, D1, M2, D2;
+        fs["M1"] >> M1;
+        fs["D1"] >> D1;
+        fs["M2"] >> M2;
+        fs["D2"] >> D2;
+
+        M1 *= scale;
+        M2 *= scale;
+
+        fs.open(extrinsic_filename, CV_STORAGE_READ);
+        if(!fs.isOpened())
+        {
+            printf("Failed to open file %s\n", extrinsic_filename);
+            return -1;
+        }
+
+        Mat R, T, R1, P1, R2, P2;
+        fs["R"] >> R;
+        fs["T"] >> T;
+
+        stereoRectify( M1, D1, M2, D2, img_size, R, T, R1, R2, P1, P2, Q, CALIB_ZERO_DISPARITY, -1, img_size, &roi1, &roi2 );
+
+        Mat map11, map12, map21, map22;
+        initUndistortRectifyMap(M1, D1, R1, P1, img_size, CV_16SC2, map11, map12);
+        initUndistortRectifyMap(M2, D2, R2, P2, img_size, CV_16SC2, map21, map22);
+
+        Mat img1r, img2r;
+        remap(img1, img1r, map11, map12, INTER_LINEAR);
+        remap(img2, img2r, map21, map22, INTER_LINEAR);
+
+        img1 = img1r;
+        img2 = img2r;
+        imshow("Left rectified", img1);
+        imshow("Right rectified", img2);
+    }
+
+    numberOfDisparities = numberOfDisparities > 0 ? numberOfDisparities : ((img_size.width/8) + 15) & -16;
+
+//    bm.state->roi1 = roi1;
+//    bm.state->roi2 = roi2;
+//    bm.state->preFilterCap = preFilterCap;
+//    bm.state->SADWindowSize = 9;
+//    bm.state->minDisparity = -64;
+//    bm.state->numberOfDisparities = numberOfDisparities;
+//    bm.state->textureThreshold = 10;
+//    bm.state->uniquenessRatio = 15;
+//    bm.state->speckleWindowSize = 100;
+//    bm.state->speckleRange = 32;
+//    bm.state->disp12MaxDiff = 1;
+
+    /// ORIGINAL PARAMETERS
+    bm.state->roi1 = roi1;
+    bm.state->roi2 = roi2;
+    bm.state->preFilterCap = 31;
+    bm.state->SADWindowSize = SADWindowSize > 0 ? SADWindowSize : 9;
+    bm.state->minDisparity = 0;
+    bm.state->numberOfDisparities = numberOfDisparities;
+    bm.state->textureThreshold = 10;
+    bm.state->uniquenessRatio = 15;
+    bm.state->speckleWindowSize = 100;
+    bm.state->speckleRange = 32;
+    bm.state->disp12MaxDiff = 1;
+
+//    CvStereoBMState *BMState = cvCreateStereoBMState();
+//    BMState->preFilterSize=41;
+//    BMState->preFilterCap=31; *
+//    BMState->SADWindowSize=41;
+//    BMState->minDisparity=-64;
+//    BMState->numberOfDisparities=128;
+//    BMState->textureThreshold=10;
+//    BMState->uniquenessRatio=15;
+
+
+    sgbm.preFilterCap = 63;
+    sgbm.SADWindowSize = SADWindowSize > 0 ? SADWindowSize : 3;
+
+    int cn = img1.channels();
+
+    sgbm.P1 = 8*cn*sgbm.SADWindowSize*sgbm.SADWindowSize;
+    sgbm.P2 = 32*cn*sgbm.SADWindowSize*sgbm.SADWindowSize;
+    sgbm.minDisparity = 0;
+    sgbm.numberOfDisparities = numberOfDisparities;
+    sgbm.uniquenessRatio = 10;
+    sgbm.speckleWindowSize = bm.state->speckleWindowSize;
+    sgbm.speckleRange = bm.state->speckleRange;
+    sgbm.disp12MaxDiff = 1;
+    sgbm.fullDP = alg == STEREO_HH;
+
+    var.levels = 3;                                 // ignored with USE_AUTO_PARAMS
+    var.pyrScale = 0.5;                             // ignored with USE_AUTO_PARAMS
+    var.nIt = 25;
+    var.minDisp = -numberOfDisparities;
+    var.maxDisp = 0;
+    var.poly_n = 3;
+    var.poly_sigma = 0.0;
+    var.fi = 15.0f;
+    var.lambda = 0.03f;
+    var.penalization = var.PENALIZATION_TICHONOV;   // ignored with USE_AUTO_PARAMS
+    var.cycle = var.CYCLE_V;                        // ignored with USE_AUTO_PARAMS
+    var.flags = var.USE_SMART_ID | var.USE_AUTO_PARAMS | var.USE_INITIAL_DISPARITY | var.USE_MEDIAN_FILTERING ;
+
+    Mat disp, disp8;
+    //Mat img1p, img2p, dispp;
+    //copyMakeBorder(img1, img1p, 0, 0, numberOfDisparities, 0, IPL_BORDER_REPLICATE);
+    //copyMakeBorder(img2, img2p, 0, 0, numberOfDisparities, 0, IPL_BORDER_REPLICATE);
+
+    //int64 t = getTickCount();
+    if( alg == STEREO_BM )
+        bm(img1, img2, disp);
+    else if( alg == STEREO_VAR )
+    {
+        var(img1, img2, disp);
+    }
+    else if( alg == STEREO_SGBM || alg == STEREO_HH )
+        sgbm(img1, img2, disp);
+    //t = getTickCount() - t;
+    //printf("Time elapsed: %fms\n", t*1000/getTickFrequency());
+
+    //disp = dispp.colRange(numberOfDisparities, img1p.cols);
+    if( alg != STEREO_VAR )
+        disp.convertTo(disp8, CV_8U, 255/(numberOfDisparities*16.));
+    else
+        disp.convertTo(disp8, CV_8U);
+    if( !no_display )
+    {
+        imshow(windowName, disp8);
+    }
+
+
+    Mat imgLeft = img1;
+    Mat imgRight = img2;
+    //-- And create the image in which we will save our disparities
+    Mat imgDisparity16S = Mat( imgLeft.rows, imgLeft.cols, CV_16S );
+    Mat imgDisparity8U = Mat( imgLeft.rows, imgLeft.cols, CV_8UC1 );
+
+    if( !imgLeft.data || !imgRight.data )
+    { std::cout<< " --(!) Error reading images " << std::endl; return -1; }
+
+    //-- 2. Call the constructor for StereoBM
+    int ndisparities = 16*5;   /**< Range of disparity */
+   // int SADWindowSize = 21; /**< Size of the block window. Must be odd */
+
+    StereoBM sbm( StereoBM::BASIC_PRESET,
+                  ndisparities,
+                  21 );
+
+    //-- 3. Calculate the disparity image
+    sbm( imgLeft, imgRight, imgDisparity16S, CV_16S );
+
+    //-- Check its extreme values
+    double minVal; double maxVal;
+
+    minMaxLoc( imgDisparity16S, &minVal, &maxVal );
+
+    //printf("Min disp: %f Max value: %f \n", minVal, maxVal);
+
+    //-- 4. Display it as a CV_8UC1 image
+    imgDisparity16S.convertTo( imgDisparity8U, CV_8UC1, 255/(maxVal - minVal));
+
+    namedWindow( "Disparity", WINDOW_NORMAL );
+    imshow( "Disparity", imgDisparity8U );
+
+    return 0;
+}
+
+
+int main(int argc, char* argv[])
+{
      int ww = 320;
      int hh = 240;
      int fps = 60;
      int skip_frames = 1;
-     bool show_matches = false;
-     bool show_depthmap = false;
-     bool show_anaglyph = false;
-     bool show_disparity_map = false;
-     bool show_FAST = false;
-     int grab_timeout_ms = 3000;
+     int grab_timeout_ms = 1000;
 
-     bool headless = false;
-     bool save_images = false;
      std::string dev0 = "/dev/video2";
      std::string dev1 = "/dev/video1";
 
@@ -134,32 +333,14 @@ int main(int argc, char* argv[])
      sprintf(system_call_bufferSecond,"su -c \"chmod 666 %s\"",  dev1.c_str());
      system(system_call_bufferSecond);
 
-     std::string stereo_matches_filename = "";
-
      Camera c(dev0.c_str(), ww, hh, fps);
      Camera c2(dev1.c_str(), ww, hh, fps);
-
-     std::string left_image_title = "Left image";
-     std::string right_image_title = "Right image";
 
      IplImage *l=cvCreateImage(cvSize(ww, hh), 8, 3);
      IplImage *r=cvCreateImage(cvSize(ww, hh), 8, 3);
 
      IplImage *lg=cvCreateImage(cvGetSize(l),IPL_DEPTH_8U,1);
      IplImage *rg=cvCreateImage(cvGetSize(r),IPL_DEPTH_8U,1);
-
-     CvMat* imageRectifiedPair=cvCreateMat(hh, ww*2,CV_8UC3 );
-
-//     printf("Loading calibration file [%s]...", "calibrate.dat");
-//     if(RESULT_OK == vision->calibrationLoad("/home/imocanu/calibrate.dat"))
-//     {
-//         printf("+OK- ALready calibrated OK");
-//     }
-//     else
-//     {
-//         printf("-FAIL open calibration file : calibrate.data");
-//         vision->calibrationStart(9, 6);
-//     }
 
      Size boardSize;
      boardSize = Size(9, 6);
@@ -173,7 +354,7 @@ int main(int argc, char* argv[])
      vector<vector<Point3f> > objectPoints;
      Size imageSize;
 
-     int i = 0, j = 0, k, nimages = 40;  // nr de perechi
+     int i = 0, j = 0, k, nimages = 30;  // nr de perechi
 
      imagePoints[0].resize(nimages);
      imagePoints[1].resize(nimages);
@@ -187,6 +368,8 @@ int main(int argc, char* argv[])
      Mat rmap[2][2];
      Rect validRoi[2];
 
+     system("rm /home/imocanu/Test_PHOTO/*.jpg");
+
      while (1)
      {
 
@@ -199,22 +382,14 @@ int main(int argc, char* argv[])
          c.toIplImage(l);
          c2.toIplImage(r);
 
-         /* display the left and right images */
-         if ((!save_images) && (!headless) && (stereo_matches_filename == ""))
-         {
-             cvShowImage(left_image_title.c_str(), l);
-             if ((!show_matches) &&
-                     (!show_FAST) &&
-                     (!show_depthmap) &&
-                     (!show_anaglyph) &&
-                     (!show_disparity_map)) {
-                 cvShowImage(right_image_title.c_str(), r);
-             }
-             //printf("poza ......\n");
-         }
-
          cvCvtColor(l, lg, CV_BGR2GRAY);
          cvCvtColor(r, rg, CV_BGR2GRAY);
+
+         Mat imgColorLeft(l);
+         imwrite( "/home/imocanu/Test_PHOTO_l.jpg", imgColorLeft );
+
+         Mat imgColorRight(r);
+         imwrite( "/home/imocanu/Test_PHOTO_r.jpg", imgColorRight );
 
          //for( i = j = 0; i < nimages; i++ )
          if(i < nimages)
@@ -229,11 +404,13 @@ int main(int argc, char* argv[])
                  {
                      Mat img1(lg);
                      img = img1;
+                     //imwrite( "/home/imocanu/lg.jpg", img );
                  }
                  else if(k == 1)
                  {
                      Mat img1(rg);
                      img = img1;
+                     //imwrite( "/home/imocanu/rg.jpg", img );
                  }
 
                  if(img.empty())
@@ -299,84 +476,52 @@ int main(int argc, char* argv[])
 
              if( k == 2 )
              {
+                 Mat img;
+
+                 std::string pathL, pathR;
+                 std::string s = std::to_string(i);
+                 pathL.append("/home/imocanu/Test_PHOTO/lg");
+                 pathL.append(s);
+                 pathL.append(".jpg");
+
+                 pathR.append("/home/imocanu/Test_PHOTO/rg");
+                 pathR.append(s);
+                 pathR.append(".jpg");
+
+                 Mat img1(lg);
+                 img = img1;
+                 imwrite( pathL , img );
+
+                 Mat img2(rg);
+                 img = img2;
+                 imwrite( pathR , img );
+
+
                  goodImageList.push_back(lg);
                  goodImageList.push_back(rg);
                  sleep(1);
                  j++;
                  i++;
-                 printf("good images .......... (%d)\n", j);
              }
+             printf("good images .......... (%d) - total (%d) \n", j, i);
          }
 
-         else
-         {
+ else
+ {
 
 
-//         if(vision->getCalibrationStarted())
-//         {
-//            int result = vision->calibrationAddSample(lg,rg);
-
-//            if(RESULT_OK == result)
-//            {
-//             printf("+OK (%d)\n", vision->getSampleCount());
-//             if(vision->getSampleCount() >= 50)
-//             {
-
-//                 vision->calibrationEnd();
-//                 sleep(2);
-//                 if(RESULT_OK == vision->calibrationSave("/home/imocanu/calibrate.dat"))
-//                 {
-//                     printf("+OK Saving calibration file ........\n");
-//                 }
-//                 else
-//                 {
-//                     printf("-FAIL Saving calibration file\n");
-//                 }
-
-//                 printf("Calibration Done !\n");
-//             }
-//            }
-//            else
-//            {
-//             //printf("-FAIL Try a different position. Chessboard should be visible on both cameras.\n");
-//            }
-//            usleep(5000);
-//         }
-
-//         if(vision->getCalibrationDone())
-//         {
-//             CvSize imageSize = vision->getImageSize();
-//             if(!imageRectifiedPair) imageRectifiedPair = cvCreateMat(hh, ww*2,CV_8UC3 );
-
-//             vision->stereoProcess(lg, rg, l, r);
-
-//             CvMat part;
-//             cvGetCols( imageRectifiedPair, &part, 0, imageSize.width );
-//             cvCvtColor( vision->imagesRectified[0], &part, CV_GRAY2BGR );
-//             cvGetCols( imageRectifiedPair, &part, imageSize.width,imageSize.width*2 );
-//             cvCvtColor( vision->imagesRectified[1], &part, CV_GRAY2BGR );
-//             for(int j = 0; j < imageSize.height; j += 16 )
-//             {
-//                 cvLine( imageRectifiedPair, cvPoint(0,j),cvPoint(imageSize.width*2,j),CV_RGB((j%3)?0:255,((j+1)%3)?0:255,((j+2)%3)?0:255));
-//             }
-
-//             cvShowImage("rectified", imageRectifiedPair );
-//             cvShowImage("depthNormalized", vision->imageDepthNormalized );
-//         }
-
-
-//             * Fundamental Matrix F
-//             * Camera Matrices left/right CM1 CM2
-//             * Distortion Coefficients for Camera left/right DIST1 DIST2
-//             * Rotation Matrix from cvStereoCalibrate R
-//             * translation vector from cvStereoCalibrate T
-//             * Reprojection Matrix Q from cvStereoRectify
-//             * rectified rotation matrix for left camera R1
-//             * rectified rotation matrix for right camera R2
-//             * projection equation matrix for left image P1
-//             * projection equation matrix for right image P1
-//             * undistorted pointlist for left image POINTS1
-//             * corresponding undistorted pointlist for right image POINTS2
+////             * Fundamental Matrix F
+////             * Camera Matrices left/right CM1 CM2
+////             * Distortion Coefficients for Camera left/right DIST1 DIST2
+////             * Rotation Matrix from cvStereoCalibrate R
+////             * translation vector from cvStereoCalibrate T
+////             * Reprojection Matrix Q from cvStereoRectify
+////             * rectified rotation matrix for left camera R1
+////             * rectified rotation matrix for right camera R2
+////             * projection equation matrix for left image P1
+////             * projection equation matrix for right image P1
+////             * undistorted pointlist for left image POINTS1
+////             * corresponding undistorted pointlist for right image POINTS2
 
      if(finalCalibrated)
      {
@@ -446,9 +591,6 @@ int main(int argc, char* argv[])
          cout << "average reprojection err = " <<  err/npoints << endl;
 
 
-
-
-
          // save intrinsic parameters
          FileStorage fs("intrinsics.yml", CV_STORAGE_WRITE);
          if( fs.isOpened() )
@@ -459,6 +601,8 @@ int main(int argc, char* argv[])
          }
          else
              cout << "Error: can not save the intrinsic parameters\n";
+
+         system("cp intrinsics.yml /home/imocanu/Test_PHOTO");
 
          Mat R1, R2, P1, P2, Q;
          //Rect validRoi[2];
@@ -476,6 +620,8 @@ int main(int argc, char* argv[])
          }
          else
              cout << "Error: can not save the intrinsic parameters\n";
+
+         system("cp extrinsics.yml /home/imocanu/Test_PHOTO");
 
          // OpenCV can handle left-right
          // or up-down camera arrangements
@@ -540,6 +686,8 @@ int main(int argc, char* argv[])
              canvas.create(h*2, w, CV_8UC3);
          }
 
+         Mat rectifLeft;
+         Mat rectitRight;
 
              for( k = 0; k < 2; k++ )
              {
@@ -550,6 +698,7 @@ int main(int argc, char* argv[])
                  {
                      Mat img1(lg);
                      img = img1;
+                     rectifLeft = img1;
                      cvShowImage("lg", lg);
 
                  }
@@ -557,6 +706,7 @@ int main(int argc, char* argv[])
                  {
                      Mat img1(rg);
                      img = img1;
+                     rectitRight = img1;
                      cvShowImage("rg", rg);
 
                  }
@@ -565,11 +715,19 @@ int main(int argc, char* argv[])
                  cvtColor(rimg, cimg, COLOR_GRAY2BGR);
                  Mat canvasPart = !isVerticalStereo ? canvas(Rect(w*k, 0, w, h)) : canvas(Rect(0, h*k, w, h));
                  resize(cimg, canvasPart, canvasPart.size(), 0, 0, CV_INTER_AREA);
+                 if(k == 0)
+                 {
+                     imshow("Part LEFT", canvasPart);
+                 }
+                 else
+                 {
+                     imshow("Part RIGHT", canvasPart);
+                 }
 //                 if( useCalibrated )
 //                 {
-                     Rect vroi(cvRound(validRoi[k].x*sf), cvRound(validRoi[k].y*sf),
-                               cvRound(validRoi[k].width*sf), cvRound(validRoi[k].height*sf));
-                     rectangle(canvasPart, vroi, Scalar(0,0,255), 3, 8);
+                 Rect vroi(cvRound(validRoi[k].x*sf), cvRound(validRoi[k].y*sf),
+                           cvRound(validRoi[k].width*sf), cvRound(validRoi[k].height*sf));
+                 rectangle(canvasPart, vroi, Scalar(0,0,255), 3, 8);
 //                 }
              }
 
@@ -579,11 +737,17 @@ int main(int argc, char* argv[])
              else
                  for( j = 0; j < canvas.cols; j += 16 )
                      line(canvas, Point(j, 0), Point(j, canvas.rows), Scalar(0, 255, 0), 1, 8);
+
+
              imshow("rectified", canvas);
 
+
+             showDepthMap(lg, rg, "STEREO BM",   0);
+             showDepthMap(lg, rg, "STEREO SGBM", 1);
+             showDepthMap(lg, rg, "STEREO HH",   2);
+             showDepthMap(lg, rg, "STEREO VAR",  3);
+
 }
-
-
          skip_frames--;
          if (skip_frames < 0) skip_frames = 0;
          int wait = cvWaitKey(10) & 255;
