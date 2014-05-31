@@ -102,8 +102,19 @@ using namespace std;
  */
 
 
-int showDepthMap(IplImage *lg,IplImage *rg, String windowName, int algorithm)
+int showDepthMap(IplImage *lg,IplImage *rg, String windowName,
+                 int algorithm,
+                 int preFilterCap,
+                 int SADWindowSizeIn,
+                 int minDisparity,
+                 int numberOfDisparitiesIn,
+                 int textureThreshold,
+                 int uniquenessRatio,
+                 int speckleWindowSize,
+                 int speckleRange)
 {
+
+    //printf("preFilterCap: (%d) SADWindowSizeIn: (%d) \n", preFilterCap, SADWindowSizeIn);
 
     /// ====================== DEPTH MAP ============================ ///
 
@@ -186,30 +197,30 @@ int showDepthMap(IplImage *lg,IplImage *rg, String windowName, int algorithm)
 
     numberOfDisparities = numberOfDisparities > 0 ? numberOfDisparities : ((img_size.width/8) + 15) & -16;
 
+    bm.state->roi1 = roi1;
+    bm.state->roi2 = roi2;
+    bm.state->preFilterCap = preFilterCap;
+    bm.state->SADWindowSize = SADWindowSizeIn;
+    bm.state->minDisparity = minDisparity;
+    bm.state->numberOfDisparities = numberOfDisparities;
+    bm.state->textureThreshold = textureThreshold;
+    bm.state->uniquenessRatio = uniquenessRatio;
+    bm.state->speckleWindowSize = speckleWindowSize;
+    bm.state->speckleRange = 32;
+    bm.state->disp12MaxDiff = 1;
+
+//    /// ORIGINAL PARAMETERS
 //    bm.state->roi1 = roi1;
 //    bm.state->roi2 = roi2;
-//    bm.state->preFilterCap = preFilterCap;
-//    bm.state->SADWindowSize = 9;
-//    bm.state->minDisparity = -64;
+//    bm.state->preFilterCap = 31;
+//    bm.state->SADWindowSize = SADWindowSize > 0 ? SADWindowSize : 9;
+//    bm.state->minDisparity = 0;
 //    bm.state->numberOfDisparities = numberOfDisparities;
 //    bm.state->textureThreshold = 10;
 //    bm.state->uniquenessRatio = 15;
 //    bm.state->speckleWindowSize = 100;
 //    bm.state->speckleRange = 32;
 //    bm.state->disp12MaxDiff = 1;
-
-    /// ORIGINAL PARAMETERS
-    bm.state->roi1 = roi1;
-    bm.state->roi2 = roi2;
-    bm.state->preFilterCap = 31;
-    bm.state->SADWindowSize = SADWindowSize > 0 ? SADWindowSize : 9;
-    bm.state->minDisparity = 0;
-    bm.state->numberOfDisparities = numberOfDisparities;
-    bm.state->textureThreshold = 10;
-    bm.state->uniquenessRatio = 15;
-    bm.state->speckleWindowSize = 100;
-    bm.state->speckleRange = 32;
-    bm.state->disp12MaxDiff = 1;
 
 //    CvStereoBMState *BMState = cvCreateStereoBMState();
 //    BMState->preFilterSize=41;
@@ -310,6 +321,25 @@ int showDepthMap(IplImage *lg,IplImage *rg, String windowName, int algorithm)
     namedWindow( "Disparity", WINDOW_NORMAL );
     imshow( "Disparity", imgDisparity8U );
 
+
+//    CBlobResult blobs;
+//    CBlob *currentBlob;
+//    int minArea = 1;
+
+//    blobs = CBlobResult(dispIpl, NULL,0);  //get all blobs in the disparity map
+//    blobs.Filter( blobs, B_EXCLUDE, CBlobGetArea(), B_LESS, minArea ); //filter blobs by area and remove all less than minArea
+
+//    //Display blobs
+//    IplImage *displayedImage = cvCreateImage(Size(640,480),8,3); //create image for outputting blobs
+//    for(int i = 0; i <= blobs.GetNumBlobs(); i++ )
+//    {
+//        currentBlob = blobs.GetBlob(i);
+//        Scalar color( rand()& 255, rand()& 255, rand()& 255 );
+//        currentBlob->FillBlob( displayedImage, color);
+//    }
+//    Mat displayImage = displayedImage; //Convert to Mat for use in imshow()
+//    imshow("Blobs", displayImage);
+
     return 0;
 }
 
@@ -362,18 +392,42 @@ int main(int argc, char* argv[])
 
      bool useCalibrated=false;
      bool showRectified=true;
-     bool finalCalibrated = true;
      bool isVerticalStereo  = true;
 
      Mat rmap[2][2];
      Rect validRoi[2];
 
+
+     bool finalCalibrated  = true;
+     bool startCalibration = true;
+
      system("rm /home/imocanu/Test_PHOTO/*.jpg");
 
-     while (1)
-     {
+     int preFilterCap  = 2;
+     int SADWindowSize = 9;
+     int minDisparity  = -100;
+     int numberOfDisparities = 16;
+     int textureThreshold  = 2;
+     int uniquenessRatio = 6;
+     int speckleWindowSize  = 100;
+     int speckleRange = 32;
 
-         if (!c.Update(&c2, 25, grab_timeout_ms))
+     Mat img1(lg);
+     Mat img = img1;
+     imshow("Filters", img);
+
+     cvCreateTrackbar("preFilterCap","Filters",         &preFilterCap, 62,NULL);
+     cvCreateTrackbar("SADWindowSize","Filters",        &SADWindowSize,255,NULL);
+     cvCreateTrackbar("minDisparity","Filters",         &minDisparity, 100,NULL);
+     cvCreateTrackbar("numberOfDisparities","Filters",  &numberOfDisparities, 256,NULL);
+     cvCreateTrackbar("textureThreshold","Filters",     &textureThreshold, 32000,NULL);
+     cvCreateTrackbar("uniquenessRatio","Filters",      &uniquenessRatio, 255,NULL);
+     cvCreateTrackbar("speckleWindowSize","Filters",    &speckleWindowSize, 100,NULL);
+     cvCreateTrackbar("speckleRange","Filters",         &speckleRange, 100,NULL);
+
+     while(1)
+     {
+         if (!c.Update(&c2, 50, grab_timeout_ms))
          {
              printf("Failed to acquire images\n");
              break;
@@ -384,15 +438,19 @@ int main(int argc, char* argv[])
 
          cvCvtColor(l, lg, CV_BGR2GRAY);
          cvCvtColor(r, rg, CV_BGR2GRAY);
+         sleep(1);
 
-         Mat imgColorLeft(l);
-         imwrite( "/home/imocanu/Test_PHOTO_l.jpg", imgColorLeft );
+         Mat img1(lg);
+         Mat img = img1;
+         imshow("Filters", img);
 
-         Mat imgColorRight(r);
-         imwrite( "/home/imocanu/Test_PHOTO_r.jpg", imgColorRight );
 
-         //for( i = j = 0; i < nimages; i++ )
-         if(i < nimages)
+//         Mat imgColorLeft(l);
+//         imwrite( "/home/imocanu/Test_PHOTO_l.jpg", imgColorLeft);
+//         Mat imgColorRight(r);
+//         imwrite( "/home/imocanu/Test_PHOTO_r.jpg", imgColorRight);
+
+         if(i < nimages && startCalibration)
          {
              for( k = 0; k < 2; k++ )
              {
@@ -496,14 +554,31 @@ int main(int argc, char* argv[])
                  img = img2;
                  imwrite( pathR , img );
 
+                 if (!c.Update(&c2, 50, grab_timeout_ms))
+                 {
+                     printf("Failed to acquire images 222\n");
+                     break;
+                 }
+
+                 c.toIplImage(l);
+                 c2.toIplImage(r);
 
                  goodImageList.push_back(lg);
                  goodImageList.push_back(rg);
+                 printf("--------------------------------------------------------------------------------------------------------------\n");
                  sleep(1);
+                 printf("#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*##*#*#*#*#*#*#*\n");
+                 sleep(1);
+                 img.empty();
+                 img1.empty();
+                 img2.empty();
+                 printf("###############################################################################################################\n");
+                 sleep(5);
                  j++;
                  i++;
              }
              printf("good images .......... (%d) - total (%d) \n", j, i);
+             //sleep(1);
          }
 
  else
@@ -668,6 +743,7 @@ int main(int argc, char* argv[])
          finalCalibrated = false;
     }
 
+
          Mat canvas;
          double sf;
          int w, h;
@@ -741,16 +817,25 @@ int main(int argc, char* argv[])
 
              imshow("rectified", canvas);
 
+             showDepthMap(lg, rg, "STEREO BM", 0,
+                          preFilterCap,
+                          SADWindowSize,
+                          minDisparity,
+                          numberOfDisparities,
+                          textureThreshold,
+                          uniquenessRatio,
+                          speckleWindowSize,
+                          speckleRange);
 
-             showDepthMap(lg, rg, "STEREO BM",   0);
-             showDepthMap(lg, rg, "STEREO SGBM", 1);
-             showDepthMap(lg, rg, "STEREO HH",   2);
-             showDepthMap(lg, rg, "STEREO VAR",  3);
+
+             //showDepthMap(lg, rg, "STEREO SGBM", 1, preFilterCap, SADWindowSize);
+             //showDepthMap(lg, rg, "STEREO HH",   2, preFilterCap, SADWindowSize);
+             //showDepthMap(lg, rg, "STEREO VAR",  3, preFilterCap, SADWindowSize);
 
 }
          skip_frames--;
          if (skip_frames < 0) skip_frames = 0;
-         int wait = cvWaitKey(10) & 255;
+         int wait = cvWaitKey(1) & 255;
 
          if( wait == 27 )
          {
