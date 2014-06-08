@@ -1,0 +1,2 @@
+set solib-search-path ./obj/local/mips
+directory /home/imocanu/NVPACK/android-ndk-r9b/platforms/android-9/arch-mips/usr/include .. /home/imocanu/NVPACK/android-ndk-r9b/sources/cxx-stl/gnu-libstdc++ ../../sdk/native/jni/include/opencv ../../sdk/native/jni/include /home/imocanu/NVPACK/android-ndk-r9b/sources/cxx-stl/gnu-libstdc++/4.6/include /home/imocanu/NVPACK/android-ndk-r9b/sources/cxx-stl/gnu-libstdc++/4.6/libs/mips/include /home/imocanu/NVPACK/android-ndk-r9b/sources/cxx-stl/gnu-libstdc++/4.6/include/backward
