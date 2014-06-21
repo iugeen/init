@@ -1,0 +1,2 @@
+set solib-search-path ./obj/local/armeabi-v7a
+directory /home/imocanu/NVPACK/android-ndk-r9b/platforms/android-9/arch-arm/usr/include /home/imocanu/NVPACK/android-ndk-r9b/sources/cxx-stl/gnu-libstdc++ ../../sdk/native/jni/include/opencv ../../sdk/native/jni/include /home/imocanu/NVPACK/android-ndk-r9b/sources/cxx-stl/gnu-libstdc++/4.6/include /home/imocanu/NVPACK/android-ndk-r9b/sources/cxx-stl/gnu-libstdc++/4.6/libs/armeabi-v7a/include /home/imocanu/NVPACK/android-ndk-r9b/sources/cxx-stl/gnu-libstdc++/4.6/include/backward
